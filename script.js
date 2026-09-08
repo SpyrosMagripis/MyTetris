@@ -18,31 +18,56 @@ let dropTimer;
 let isPaused = false;
 let lastMoveHardDrop = false;
 
-// music setup
+// music setup: chiptune-style rendition of "Korobeiniki" (traditional Russian folk melody), lead + bass
 let audioCtx;
-let musicInterval;
-const notes = [
-    261.63, 293.66, 329.63, 392.0, 523.25,
-    392.0, 329.63, 293.66, 261.63, 392.0,
-    523.25, 659.25, 523.25, 392.0, 329.63,
-    261.63, 329.63, 392.0, 523.25, 392.0,
-    329.63, 261.63, 392.0, 261.63, 329.63,
-    261.63, 293.66, 329.63, 392.0, 523.25,
-    392.0, 329.63, 293.66, 261.63, 392.0,
-    523.25, 659.25, 523.25, 392.0, 329.63,
-    261.63, 329.63, 392.0, 523.25, 392.0,
-    329.63, 261.63, 392.0, 261.63, 329.63,
-    261.63, 293.66, 329.63, 392.0, 523.25,
-    392.0, 329.63, 293.66, 261.63, 392.0,
-    523.25, 659.25, 523.25, 392.0, 329.63,
-    261.63, 329.63, 392.0, 523.25, 392.0,
-    329.63, 261.63, 392.0, 261.63, 329.63,
-    261.63, 293.66, 329.63, 392.0, 523.25,
-    392.0, 329.63, 293.66, 261.63, 392.0,
-    523.25, 659.25, 523.25, 392.0, 329.63,
-    261.63, 329.63, 392.0, 523.25, 392.0,
-    329.63, 261.63, 392.0, 261.63, 329.63
-]; // 100-note melody (~30s)
+let musicPlaying = false;
+let musicTimeout;
+let noteIndex = 0;
+const beatMs = 180;
+
+const melody = [
+    ['E5',2],['B4',1],['C5',1],['D5',2],['C5',1],['B4',1],
+    ['A4',2],['A4',1],['C5',1],['E5',2],['D5',1],['C5',1],
+    ['B4',3],['C5',1],['D5',2],['E5',2],
+    ['C5',2],['A4',2],['A4',2],['A4',2],
+    ['D5',2],['F5',1],['A5',2],['G5',1],['F5',1],
+    ['E5',3],['C5',1],['E5',2],['D5',1],['C5',1],
+    ['B4',2],['B4',1],['C5',1],['D5',2],['E5',2],
+    ['C5',2],['A4',2],['A4',2]
+];
+
+const bassline = [
+    ['A2',4],['E2',4],['A2',4],['E2',4],
+    ['A2',4],['E2',4],['A2',4],['E2',4],
+    ['D2',4],['A2',4],['D2',4],['A2',4],
+    ['E2',4],['B1',4],['E2',4],['A2',4]
+];
+
+function noteToFreq(note) {
+    const semitoneMap = { C: -9, 'C#': -8, D: -7, 'D#': -6, E: -5, F: -4, 'F#': -3, G: -2, 'G#': -1, A: 0, 'A#': 1, B: 2 };
+    const match = note.match(/^([A-G]#?)(\d)$/);
+    const [, pitch, octave] = match;
+    const semitone = semitoneMap[pitch] + (parseInt(octave, 10) - 4) * 12;
+    return 440 * Math.pow(2, semitone / 12);
+}
+
+function playTone(freq, durationSec, type, volume) {
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+    // envelope avoids clicks and gives a softer, more musical tone
+    gain.gain.setValueAtTime(0, audioCtx.currentTime);
+    gain.gain.linearRampToValueAtTime(volume, audioCtx.currentTime + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + durationSec);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + durationSec + 0.05);
+}
 
 const tetrominoes = {
     I: [
@@ -90,14 +115,32 @@ const tetrominoes = {
 };
 
 const colors = {
-    I: '#0ff',
-    J: '#f70',
-    L: '#ff0',
-    O: '#0f0',
-    S: '#00f',
-    T: '#f0f',
-    Z: '#f00'
+    I: '#00f0f0',
+    J: '#0040ff',
+    L: '#ff7f00',
+    O: '#ffef00',
+    S: '#00ff00',
+    T: '#af00ff',
+    Z: '#ff0000'
 };
+
+// lighten/darken a #rrggbb color by a percentage, used for beveled block shading
+function shadeColor(hex, percent) {
+    const num = parseInt(hex.slice(1), 16);
+    const amt = Math.round(2.55 * percent);
+    let r = Math.min(255, Math.max(0, (num >> 16) + amt));
+    let g = Math.min(255, Math.max(0, ((num >> 8) & 0xff) + amt));
+    let b = Math.min(255, Math.max(0, (num & 0xff) + amt));
+    return `#${(0x1000000 + r * 0x10000 + g * 0x100 + b).toString(16).slice(1)}`;
+}
+
+// gives filled cells a glossy, beveled look instead of a flat fill
+function styleFilledCell(cell, color) {
+    cell.style.background = `linear-gradient(135deg, ${shadeColor(color, 35)}, ${color} 55%, ${shadeColor(color, -30)})`;
+    cell.style.boxShadow = 'inset 2px 2px 2px rgba(255,255,255,0.5), inset -2px -2px 3px rgba(0,0,0,0.5)';
+    cell.style.border = '1px solid rgba(0,0,0,0.4)';
+    cell.style.borderRadius = '2px';
+}
 
 let currentPiece;
 let currentX = 3;
@@ -111,7 +154,7 @@ function drawBoard() {
             const cell = document.createElement('div');
             cell.classList.add('cell');
             if (grid[y][x]) {
-                cell.style.backgroundColor = grid[y][x];
+                styleFilledCell(cell, grid[y][x]);
             }
             board.appendChild(cell);
         }
@@ -201,7 +244,7 @@ function drawPiece() {
         if (boardY >= 0) {
             const index = boardY * COLS + boardX;
             const cell = board.children[index];
-            cell.style.backgroundColor = currentPiece.color;
+            styleFilledCell(cell, currentPiece.color);
         }
     });
 }
@@ -281,34 +324,32 @@ function togglePause() {
     pauseBtn.textContent = isPaused ? 'Resume' : 'Pause';
 }
 
-function playNote(freq, duration) {
-    if (!audioCtx) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function scheduleNextNote() {
+    if (!musicPlaying) return;
+    const [leadNote, leadBeats] = melody[noteIndex % melody.length];
+    const durSec = (leadBeats * beatMs) / 1000;
+    playTone(noteToFreq(leadNote), durSec * 0.9, 'square', 0.12);
+
+    const bassStep = bassline[noteIndex % bassline.length];
+    if (bassStep) {
+        const [bassNote, bassBeats] = bassStep;
+        playTone(noteToFreq(bassNote), (bassBeats * beatMs) / 1000 * 0.9, 'triangle', 0.09);
     }
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.type = 'square';
-    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.start();
-    osc.stop(audioCtx.currentTime + duration / 1000);
+
+    noteIndex++;
+    musicTimeout = setTimeout(scheduleNextNote, durSec * 1000);
 }
 
 function startMusic() {
-    if (musicInterval) return;
-    let i = 0;
-    musicInterval = setInterval(() => {
-        playNote(notes[i], 250);
-        i = (i + 1) % notes.length;
-    }, 300);
+    if (musicPlaying) return;
+    musicPlaying = true;
+    noteIndex = 0;
+    scheduleNextNote();
 }
 
 function stopMusic() {
-    if (musicInterval) {
-        clearInterval(musicInterval);
-        musicInterval = null;
-    }
+    musicPlaying = false;
+    clearTimeout(musicTimeout);
 }
 
 document.addEventListener('keydown', (e) => {
@@ -342,7 +383,7 @@ document.addEventListener('keydown', (e) => {
 
 pauseBtn.addEventListener('click', togglePause);
 musicBtn.addEventListener('click', () => {
-    if (musicInterval) {
+    if (musicPlaying) {
         stopMusic();
         musicBtn.textContent = 'Music On';
     } else {
