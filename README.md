@@ -60,6 +60,7 @@ No frameworks. Clean and lightweight.
 | Soft Drop      | ↓ Arrow  |
 | Hard Drop      | Spacebar |
 | Pause / Resume | P        |
+| Toggle Music   | M        |
 
 ## 📁 File Structure
 

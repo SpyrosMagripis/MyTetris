@@ -2,12 +2,14 @@ const board = document.getElementById('board');
 const scoreEl = document.getElementById('score');
 const linesEl = document.getElementById('lines');
 const levelEl = document.getElementById('level');
+const levelProgressEl = document.getElementById('level-progress');
 const pauseBtn = document.getElementById('pause-btn');
 const musicBtn = document.getElementById('music-btn');
 
 const COLS = 10;
 const ROWS = 20;
 const BLOCK_SIZE = 20;
+const LINES_PER_LEVEL = 10;
 
 let grid = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
 let score = 0;
@@ -207,7 +209,7 @@ function removeFullLines() {
     }
     score += rowsToClear.length * 100;
     lines += rowsToClear.length;
-    level = 1 + Math.floor(lines / 10);
+    level = 1 + Math.floor(lines / LINES_PER_LEVEL);
     dropInterval = 1000 - (level - 1) * 100;
     clearInterval(dropTimer);
     dropTimer = setInterval(tick, dropInterval);
@@ -232,9 +234,11 @@ function showLineBreakEffect(rows) {
 }
 
 function updateScore() {
+    const linesUntilNextLevel = LINES_PER_LEVEL - (lines % LINES_PER_LEVEL);
     scoreEl.textContent = `Score: ${score}`;
     linesEl.textContent = `Lines: ${lines}`;
     levelEl.textContent = `Level: ${level}`;
+    levelProgressEl.textContent = `Next level: ${linesUntilNextLevel} line${linesUntilNextLevel === 1 ? '' : 's'} remaining`;
 }
 
 function drawPiece() {
@@ -353,6 +357,15 @@ function stopMusic() {
 }
 
 document.addEventListener('keydown', (e) => {
+    if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' ', 'p', 'P', 'm', 'M'].includes(e.key)) {
+        e.preventDefault();
+    }
+
+    if (e.key === 'm' || e.key === 'M') {
+        toggleMusic();
+        return;
+    }
+
     if (isPaused) return;
     switch(e.key) {
         case 'ArrowLeft':
@@ -383,13 +396,17 @@ document.addEventListener('keydown', (e) => {
 
 pauseBtn.addEventListener('click', togglePause);
 musicBtn.addEventListener('click', () => {
+    toggleMusic();
+});
+
+function toggleMusic() {
     if (musicPlaying) {
         stopMusic();
-        musicBtn.textContent = 'Music On';
+        musicBtn.textContent = 'Music On (M)';
     } else {
         startMusic();
-        musicBtn.textContent = 'Music Off';
+        musicBtn.textContent = 'Music Off (M)';
     }
-});
+}
 
 startGame();
