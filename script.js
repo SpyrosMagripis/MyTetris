@@ -3,6 +3,7 @@ const scoreEl = document.getElementById('score');
 const linesEl = document.getElementById('lines');
 const levelEl = document.getElementById('level');
 const levelProgressEl = document.getElementById('level-progress');
+const nextPieceEl = document.getElementById('next-piece');
 const pauseBtn = document.getElementById('pause-btn');
 const musicBtn = document.getElementById('music-btn');
 
@@ -145,6 +146,8 @@ function styleFilledCell(cell, color) {
 }
 
 let currentPiece;
+let nextPiece;
+let pieceBag = [];
 let currentX = 3;
 let currentY = 0;
 let rotation = 0;
@@ -164,9 +167,37 @@ function drawBoard() {
 }
 
 function randomPiece() {
-    const keys = Object.keys(tetrominoes);
-    const key = keys[Math.floor(Math.random() * keys.length)];
+    if (pieceBag.length === 0) {
+        pieceBag = Object.keys(tetrominoes);
+        for (let i = pieceBag.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [pieceBag[i], pieceBag[j]] = [pieceBag[j], pieceBag[i]];
+        }
+    }
+    const key = pieceBag.pop();
     return { shape: tetrominoes[key], color: colors[key], key };
+}
+
+function drawNextPiece() {
+    const shape = nextPiece.shape[0];
+    const minX = Math.min(...shape.map(([x]) => x));
+    const maxX = Math.max(...shape.map(([x]) => x));
+    const minY = Math.min(...shape.map(([, y]) => y));
+    const maxY = Math.max(...shape.map(([, y]) => y));
+    const offsetX = Math.floor((4 - (maxX - minX + 1)) / 2) - minX;
+    const offsetY = Math.floor((4 - (maxY - minY + 1)) / 2) - minY;
+
+    nextPieceEl.innerHTML = '';
+    const cells = [];
+    for (let i = 0; i < 16; i++) {
+        const cell = document.createElement('div');
+        cell.classList.add('preview-cell');
+        cells.push(cell);
+        nextPieceEl.appendChild(cell);
+    }
+    shape.forEach(([x, y]) => {
+        styleFilledCell(cells[(y + offsetY) * 4 + x + offsetX], nextPiece.color);
+    });
 }
 
 function canMove(offsetX, offsetY, newRotation) {
@@ -254,7 +285,9 @@ function drawPiece() {
 }
 
 function spawnPiece() {
-    currentPiece = randomPiece();
+    currentPiece = nextPiece || randomPiece();
+    nextPiece = randomPiece();
+    drawNextPiece();
     currentX = 3;
     currentY = -1;
     rotation = 0;
@@ -279,6 +312,8 @@ function tick() {
 
 function startGame() {
     grid = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
+    pieceBag = [];
+    nextPiece = undefined;
     score = 0;
     lines = 0;
     level = 1;
