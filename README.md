@@ -11,6 +11,7 @@ A simple, classic Tetris game built to run directly in your web browser. No inst
 
 - Responsive grid-based Tetris board
 - Classic falling tetrominoes (I, O, T, S, Z, J, L)
+- Next-piece preview with fair 7-bag piece randomization
 - Rotation, movement, and instant drop support
 - Line clearing and scoring
 - Game over detection
